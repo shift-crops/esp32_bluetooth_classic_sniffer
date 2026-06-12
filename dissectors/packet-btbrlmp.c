@@ -25,6 +25,7 @@
 
 #include <epan/packet.h>
 #include <epan/prefs.h>
+#include <epan/tfs.h>
 
 /* LMP opcodes */
 #define LMP_VSC 0
@@ -3731,7 +3732,7 @@ void dissect_ping_res(proto_tree *tree, tvbuff_t *tvb, int offset, int len)
 
 /* Link Manager Protocol */
 static int
-dissect_btbrlmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+dissect_btbrlmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
 	proto_item *lmp_item;
 	proto_tree *lmp_tree;
@@ -3775,11 +3776,11 @@ dissect_btbrlmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
 		eop = tvb_get_guint8(tvb, offset + 1);
 
-		col_append_str(pinfo->cinfo, COL_INFO, val_to_str(eop, ext_opcode, "Unknown Extended Opcode (%d)"));
+		col_append_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, eop, ext_opcode, "Unknown Extended Opcode (%d)"));
 	}
 	else
 	{
-		col_append_str(pinfo->cinfo, COL_INFO, val_to_str(op, opcode, "Unknown Opcode (%d)"));
+		col_append_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, op, opcode, "Unknown Opcode (%d)"));
 	}
 
 	/* see if we are being asked for details */
@@ -4957,12 +4958,12 @@ void proto_register_btbrlmp(void)
 
 	/* register the protocol name and description */
 	proto_btbrlmp = proto_register_protocol(
-		"Bluetooth Link Manager Protocol", /* full name */
-		"btlmp",						   /* short name */
-		"btlmp"							   /* abbreviation (e.g. for filters) */
+		"Bluetooth BR/EDR Link Manager Protocol", /* full name */
+		"BT BR/EDR LMP",						  /* short name */
+		"btbrlmp"								  /* abbreviation (e.g. for filters) */
 	);
 
-	register_dissector("btlmp", dissect_btbrlmp, proto_btbrlmp);
+	register_dissector("btbrlmp", dissect_btbrlmp, proto_btbrlmp);
 
 	/* register the header fields and subtrees used */
 	proto_register_field_array(proto_btbrlmp, hf, array_length(hf));

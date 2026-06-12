@@ -27,6 +27,7 @@
 
 #include <epan/packet.h>
 #include <epan/prefs.h>
+#include <epan/tfs.h>
 #include <epan/dissectors/packet-bthci_acl.h>
 #include <string.h>
 #include <stdio.h>
@@ -1006,7 +1007,7 @@ static void dissect_lm_le(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, i
 
 	opcode = tvb_get_guint8(tvb, offset);
 	proto_tree_add_item(tree, hf_h4bcm_le_opcode, tvb, offset, 1, ENC_NA);
-	col_add_str(pinfo->cinfo, COL_INFO, val_to_str(opcode, lm_le_opcodes, "LE LL Unknown Opcode (%d)"));
+	col_add_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, opcode, lm_le_opcodes, "LE LL Unknown Opcode (%d)"));
 	offset += 1;
 
 	switch (opcode)
@@ -1018,7 +1019,7 @@ static void dissect_lm_le(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, i
 	case 0xff:
 		opcode_ext = tvb_get_guint8(tvb, offset);
 		proto_tree_add_item(tree, hf_h4bcm_le_opcode_ext, tvb, offset, 1, ENC_NA);
-		col_add_str(pinfo->cinfo, COL_INFO, val_to_str(opcode_ext, lm_le_opcodes_ext, "LE LL Unknown VSC Opcode (%d)"));
+		col_add_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, opcode_ext, lm_le_opcodes_ext, "LE LL Unknown VSC Opcode (%d)"));
 		offset += 1;
 		break;
 	default:
@@ -1065,7 +1066,7 @@ dissect_h4bcm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U
 	h4bcm_tree = proto_item_add_subtree(h4bcm_item, ett_h4bcm);
 
 	h4bcm_type = tvb_get_guint8(tvb, offset);
-	col_add_str(pinfo->cinfo, COL_INFO, val_to_str(h4bcm_type, h4bcm_types, "Unknown Type (%d)"));
+	col_add_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, h4bcm_type, h4bcm_types, "Unknown Type (%d)"));
 	offset += 1;
 
 	switch (h4bcm_type)
@@ -1549,8 +1550,10 @@ void proto_reg_handoff_h4bcm(void)
 	packetlogger_handle = find_dissector("packetlogger");
 	dissector_add_uint("hci_h4.type", 0x0A, packetlogger_handle);
 
-	/* LMP dissector from https://github.com/greatscottgadgets/libbtbb */
-	btlmp_handle = find_dissector("btlmp");
+	/* Prefer the bundled BR/EDR LMP dissector; fall back to Wireshark's built-in one. */
+	btlmp_handle = find_dissector("btbrlmp");
+	if (!btlmp_handle)
+		btlmp_handle = find_dissector("btlmp");
 	btl2cap_handle = find_dissector("btl2cap");
 
 	// dissector_add_uint("wtap_encap", WTAP_ENCAP_ESPRESSIF_BT, h4bcm_handle);
