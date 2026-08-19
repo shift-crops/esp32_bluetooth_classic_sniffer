@@ -10,9 +10,11 @@ set(PYTHON3_URL
 )
 
 set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
-set(CMAKE_BUILD_RPATH $ORIGIN host_stack runtime/install/lib/)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/host_stack)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/host_stack)
+# libbtstack.so and the programs share one output dir (build/host_stack), so $ORIGIN
+# lets each binary find the library next to it.
+set(CMAKE_BUILD_RPATH $ORIGIN runtime/install/lib/)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/host_stack)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/host_stack)
 
 # * pthreads
 find_package(Threads REQUIRED)
@@ -49,43 +51,10 @@ if(NOT EXISTS ${PROJECT_SOURCE_DIR}/runtime/success)
 endif()
 set(PYTHON_EXECUTABLE ${PROJECT_SOURCE_DIR}/runtime/install/bin/python3)
 
-# Bluetooth Stack
-set(BTSTACK_ROOT ${PROJECT_SOURCE_DIR}/host_stack/bluekitchen/)
-add_subdirectory(${BTSTACK_ROOT})
-set(BT_INCLUDES
-    ${BTSTACK_ROOT}/3rd-party/micro-ecc
-    ${BTSTACK_ROOT}/3rd-party/bluedroid/decoder/include
-    ${BTSTACK_ROOT}/3rd-party/bluedroid/encoder/include
-    ${BTSTACK_ROOT}/3rd-party/md5
-    ${BTSTACK_ROOT}/3rd-party/hxcmod-player
-    ${BTSTACK_ROOT}/3rd-party/hxcmod-player/mod
-    ${BTSTACK_ROOT}/3rd-party/lwip/core/src/include
-    ${BTSTACK_ROOT}/3rd-party/lwip/dhcp-server
-    ${BTSTACK_ROOT}/3rd-party/rijndael
-    ${BTSTACK_ROOT}/3rd-party/yxml
-    ${BTSTACK_ROOT}/3rd-party/tinydir
-    ${BTSTACK_ROOT}/chipset/bcm
-    ${BTSTACK_ROOT}/chipset/csr
-    ${BTSTACK_ROOT}/src
-    ${BTSTACK_ROOT}/platform/posix
-    ${BTSTACK_ROOT}/platform/embedded
-    ${BTSTACK_ROOT}/platform/lwip
-    ${BTSTACK_ROOT}/platform/lwip/port
-    ${BTSTACK_ROOT})
-
-# BT programs executable
-set(BT_PROGRAMS ${PROJECT_SOURCE_DIR}/host_stack/spp_counter.c
-                ${PROJECT_SOURCE_DIR}/host_stack/sdp_rfcomm_query.c)
-foreach(BT_PROGRAM_FILE ${BT_PROGRAMS})
-  # add main.cpp and run loop
-  get_filename_component(BT_PROGRAM ${BT_PROGRAM_FILE} NAME_WE)
-  message("BT Program: ${BT_PROGRAM_FILE}")
-  list(APPEND BT_PROGRAM_FILE
-       ${BTSTACK_ROOT}/platform/posix/btstack_run_loop_posix.c
-       ${PROJECT_SOURCE_DIR}/host_stack/bt_stack.cpp)
-  add_executable(${BT_PROGRAM} ${BT_PROGRAM_FILE})
-  target_link_libraries(${BT_PROGRAM} ${CMAKE_THREAD_LIBS_INIT} btstack)
-  target_include_directories(${BT_PROGRAM} PRIVATE ${BT_INCLUDES})
-endforeach()
+# Bluetooth host stack (libbtstack.so + sdp_rfcomm_query/spp_counter).
+# Everything is defined in host_stack/CMakeLists.txt: it builds the shared library from the
+# pristine clone (host_stack/btstack) with host_stack/overlay overriding config + a few
+# patched files, and links the host programs (host_stack/programs) against it.
+add_subdirectory(${PROJECT_SOURCE_DIR}/host_stack)
 
 message("Build RPath: ${CMAKE_BUILD_RPATH}")

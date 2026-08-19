@@ -7,10 +7,6 @@ dissectors/build/
 
 CMakeFiles/
 
-host_stack/blue-kitchen/test/
-
-host_stack/blue-kitchen/doc/
-
 logs/capture_bluetooth.pcapng
 
 runtime/install/
@@ -32,3 +28,4 @@ firmware/packages/
 firmware/platforms/
 
 firmware/appstate.json
+

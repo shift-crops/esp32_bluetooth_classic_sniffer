@@ -1,3 +1,6 @@
 [submodule "firmware/esp32_firmware_patching_framework"]
 	path = firmware/esp32_firmware_patching_framework
-	url = https://github.com/Matheus-Garbelini/esp32_firmware_patching_framework
+	url = https://github.com/shift-crops/esp32_firmware_patching_framework.git
+[submodule "host_stack/btstack"]
+	path = host_stack/btstack
+	url = https://github.com/bluekitchen/btstack.git

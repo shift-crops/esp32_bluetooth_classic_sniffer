@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-echo -e "\nCompiling Bluekitchen BT programs"
+echo -e "\nCompiling BT host programs (against pristine host_stack/btstack + host_stack/overlay patches)"
 sudo apt install cmake software-properties-common -y
 mkdir -p build
 cd build

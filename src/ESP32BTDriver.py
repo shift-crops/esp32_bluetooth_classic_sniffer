@@ -46,6 +46,7 @@ ESP32_CMD_VERSION = b'\xEE'
 ESP32_CMD_ENABLE_LMP_SNIFFING = b'\x81'
 ESP32_CMD_SET_BDADDR = b'\x87'
 ESP32_CMD_DISABLE_POLL_NULL = b'\x89'
+ESP32_CMD_FORCE_NO_ENCRYPTION = b'\x8A'
 
 # HCI Codes to bridge
 H4_NONE = b'\x00'
@@ -150,6 +151,13 @@ class ESP32BTDriver:
 
     def disable_poll_null(self, val):
         self.serial.write(ESP32_CMD_DISABLE_POLL_NULL + bytearray([val]))
+        self.serial.read(1)
+
+    def force_no_encryption(self, val):
+        # Force the controller to request Encryption Mode 0 (no encryption)
+        # by rewriting the outgoing LMP_encryption_mode_req and suppressing the
+        # subsequent key-size/start-encryption LMPs. val=0 keeps normal encryption.
+        self.serial.write(ESP32_CMD_FORCE_NO_ENCRYPTION + bytearray([val]))
         self.serial.read(1)
 
     def set_bdaddr(self, value):

@@ -34,6 +34,9 @@ class SnifferBREDR:
     start_wireshark = False
     wireshark_started = False
     host_bdaddr = None
+    sec_level = 2
+    force_no_encryption = False
+    fresh_pairing = False
 
     driver = None  # type: ESP32BTDriver
     driver_run = False
@@ -63,7 +66,9 @@ class SnifferBREDR:
                  bridge_hci=True,
                  bt_program=None,
                  target_bdaddress=None,
-                 host_bdaddr='E0:D4:E8:19:C7:68'):
+                 host_bdaddr='E0:D4:E8:19:C7:68',
+                 sec_level=2,
+                 fresh_pairing=False):
 
         self.show_summary = show_summary
         self.start_wireshark = start_wireshark
@@ -73,6 +78,12 @@ class SnifferBREDR:
         self.bridge_hci = bridge_hci
         self.bt_bdaddr = target_bdaddress
         self.host_bdaddr = host_bdaddr
+        # Security staging: 0=no pairing/no enc, 1=pairing/no enc, 2=pairing+enc.
+        self.sec_level = sec_level
+        # Firmware strips on-air encryption for levels 0 and 1.
+        self.force_no_encryption = (sec_level < 2)
+        # Delete cached link keys at startup so pairing happens fresh each run.
+        self.fresh_pairing = fresh_pairing
 
         if pcap_filename:
             self.pcap_filename = pcap_filename
@@ -119,6 +130,10 @@ class SnifferBREDR:
             self.driver.enable_sniffing(1)
             self.driver.disable_poll_null(1)
             self.driver.set_bdaddr(self.host_bdaddr)
+            if self.force_no_encryption:
+                self.driver.force_no_encryption(1)
+                print(Fore.MAGENTA +
+                      '[!] sec-level %d: firmware will strip on-air encryption (Encryption Mode 0)' % self.sec_level)
 
             print(Fore.GREEN + 'ESP32BT driver started on ' +
                   self.serial_port + '@' + str(self.serial_baud))
@@ -134,13 +149,40 @@ class SnifferBREDR:
             self.bt_program_thread.daemon = True
             self.bt_program_thread.start()
 
+    def clear_link_keys(self):
+        # bt_stack.cpp persists link keys to /tmp/btstack_<LOCAL_ADDR>.tlv, where
+        # LOCAL_ADDR is the (upper-case) host controller address. Remove it so the
+        # next connection has no cached key and must pair again.
+        paths = set()
+        if self.host_bdaddr:
+            paths.add('/tmp/btstack_%s.tlv' % self.host_bdaddr.upper())
+            paths.add('/tmp/btstack_%s.tlv' % self.host_bdaddr.lower())
+        removed = []
+        for path in paths:
+            try:
+                os.remove(path)
+                removed.append(path)
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                self.error('Could not remove %s: %s' % (path, e))
+        if removed:
+            self.l('[fresh-pairing] Removed cached link keys: ' + ', '.join(removed))
+        else:
+            self.l('[fresh-pairing] No cached link-key TLV found; will pair fresh')
+
     def bt_program_handler(self):
         if self.bridge_hci:
             p_name = self.driver.serial_bridge_name
         else:
             p_name = self.serial_port
 
+        if self.fresh_pairing:
+            self.clear_link_keys()
+
         p_args = [self.bt_program, '-u', p_name, '-a', str(self.bt_bdaddr)]
+        # Tell the BT host program which GAP security level to use (0/1/2).
+        p_args += ['--sec-level', str(self.sec_level)]
         print('Starting ' + str(p_args))
         process = subprocess.Popen(p_args)
         self.bt_program_process = process
@@ -201,7 +243,17 @@ serial_baud = 921600
               help='Show a summary of each packet on terminal')
 @click.option('--bridge-only', is_flag=True,
               help='Starts the HCI bridge without connecting any BT Host stack')
-def sniffer(port, host, target, live_wireshark, live_terminal, bridge_only):
+@click.option('--sec-level', type=click.IntRange(0, 2), default=2, show_default=True,
+              help='Security staging: 0=no pairing/no encryption, 1=pairing but no encryption, 2=pairing+encryption')
+@click.option('--no-encryption', is_flag=True,
+              help='Alias for --sec-level 0 (no pairing / no encryption, downgrade test)')
+@click.option('--fresh-pairing', is_flag=True,
+              help='Delete cached link keys (/tmp/btstack_<host>.tlv) at startup to force a new pairing each run')
+def sniffer(port, host, target, live_wireshark, live_terminal, bridge_only, sec_level, no_encryption, fresh_pairing):
+
+    # --no-encryption is a backward-compatible alias for --sec-level 0
+    if no_encryption:
+        sec_level = 0
 
     bt_program = None
     host_bdaddress = None
@@ -225,7 +277,7 @@ def sniffer(port, host, target, live_wireshark, live_terminal, bridge_only):
     if (live_terminal or live_wireshark) and not bridge_only:
         bd_role_master = True if target else False
         bt_program = (
-            './host_stack/sdp_rfcomm_query' if bd_role_master else './host_stack/spp_counter')
+            './build/host_stack/sdp_rfcomm_query' if bd_role_master else './build/host_stack/spp_counter')
     else:
         print(Fore.YELLOW + '[!] Bridge will start without BT host stack')
 
@@ -241,7 +293,9 @@ def sniffer(port, host, target, live_wireshark, live_terminal, bridge_only):
                            show_summary=live_terminal,
                            start_wireshark=live_wireshark,
                            bt_program=bt_program,
-                           target_bdaddress=target)
+                           target_bdaddress=target,
+                           sec_level=sec_level,
+                           fresh_pairing=fresh_pairing)
     Sniffer.start()
 
     try:

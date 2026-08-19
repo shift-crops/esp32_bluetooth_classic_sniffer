@@ -26,6 +26,27 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/tfs.h>
+#include <epan/exceptions.h>
+
+/*
+ * The upstream btbrlmp dissector hard-asserts exact LMP PDU lengths via
+ * DISSECTOR_ASSERT(len == N). Any ACL-C payload that is not a clean LMP PDU
+ * of the expected length -- e.g. ciphertext captured after an encryption
+ * state desync, retransmissions, or a controller that pads the PDU -- trips
+ * the assert and Wireshark reports a scary "[Dissector bug ...]" and aborts
+ * dissection of that packet.
+ *
+ * Re-map DISSECTOR_ASSERT within this file to raise a normal
+ * ReportedBoundsError instead. Such packets are then flagged as the standard
+ * "[Malformed Packet]" (the sanctioned Wireshark behavior for bad input)
+ * rather than being blamed on a dissector bug. This changes no call sites and
+ * works regardless of the enclosing function's return type (THROW longjmps).
+ */
+#ifdef DISSECTOR_ASSERT
+#undef DISSECTOR_ASSERT
+#endif
+#define DISSECTOR_ASSERT(expr) \
+	do { if (!(expr)) THROW(ReportedBoundsError); } while (0)
 
 /* LMP opcodes */
 #define LMP_VSC 0
